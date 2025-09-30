@@ -145,7 +145,7 @@ def show_stats():
 
 def show_new_members():
     st.title('Members')
-    member_data = file_to_json(st.session_state['comments_file'])
+    member_data = st.session_state['comments_file']
     path, members = get_new_members(member_data)
     if path is not None:
         st.image(path)

@@ -1,7 +1,7 @@
+import os
 import pandas as pd
 import pathlib
 from datetime import datetime
-import tempfile
 import streamlit as st
 
 from text_classification.Task import Task
@@ -33,35 +33,28 @@ def custom_model_classification_page():
     # Step 1: Dataset Selection
     # =============================================================================
     st.markdown("### Step 1: Dataset Selection")
-    st.markdown("Upload a new file for text classification.")
+    st.markdown("Using comments data loaded from the main page.")
 
-    uploadedFile = st.file_uploader("", type=['csv', 'json', 'xlsx', 'xls'])
+    # Check if comments data is available
+    if st.session_state.get('comments_file') is None:
+        st.error("❌ No comments data found. Please upload a JSON file on the main page first.")
+        st.info("💡 Go to 'Upload Json' page to load your comments data.")
+        return
 
-    if uploadedFile is not None:
-        try:
-            # Save file temporarily
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploadedFile.name.split('.')[-1]}") as temporarilyFile:
-                temporarilyFile.write(uploadedFile.getvalue())
-                temporarilyPath = temporarilyFile.name
+    # Load comments data into DataFrame automatically
+    try:
+        # Convert comments list to DataFrame
+        comments_df = pd.DataFrame(st.session_state['comments_file'])
+        
+        # Configure dataset in current task
+        st.session_state.currentTaskInEdition.inputDataset = comments_df
+        st.session_state.datasetLoaded = True
+        
+        st.success("✅ Comments data loaded successfully!")
 
-            selectedDataset = {
-                'name': uploadedFile.name,
-                'path': temporarilyPath,
-                'size': len(uploadedFile.getvalue())
-            }
-
-            # Load and visualize automatically
-            try:
-                # Configure dataset in current task
-                st.session_state.currentTaskInEdition.SetInputDatasetPath(selectedDataset['path'])
-                st.session_state.currentTaskInEdition.LoadInputDataset()
-                st.session_state.datasetLoaded = True
-
-            except Exception as e:
-                st.error(f"❌ Error loading dataset: {str(e)}")
-
-        except Exception as e:
-            st.error(f"Error loading file: {str(e)}")
+    except Exception as e:
+        st.error(f"❌ Error loading comments data: {str(e)}")
+        return
 
     # Preview the dataset if loaded
     if st.session_state.datasetLoaded and st.session_state.currentTaskInEdition is not None:
@@ -99,7 +92,7 @@ def custom_model_classification_page():
 
             if selectedTextColumn:
                 st.session_state.selectedTextColumn = selectedTextColumn
-                st.success(f"✅ File '{uploadedFile.name}' loaded successfully and target column selected: {selectedTextColumn}")
+                st.success(f"✅ Comments data loaded successfully and target column selected: {selectedTextColumn}")
 
     st.markdown("---")
 

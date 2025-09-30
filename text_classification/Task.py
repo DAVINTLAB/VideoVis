@@ -94,7 +94,7 @@ class Task:
             elif self.inputDatasetPath.endswith(('.xlsx', '.xls')):
                 self.inputDataset = pd.read_excel(self.inputDatasetPath)
             else:
-                raise ValueError("Unsuppo   rted file format")
+                raise ValueError("Unsupported file format")
 
             self.firstStep = True
         except Exception as e:

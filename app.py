@@ -45,6 +45,26 @@ def landing_page():
 
     st.button('Refresh', on_click=lambda: upload_json(json_file))
 
+    st.markdown('''
+    ## How to Use?
+                
+    **1. Upload a JSON File**  
+    - Click the *Browse Files* button above to upload a JSON file.
+                    
+    **2. Run Detoxify (toxicity classification)**  
+    - If you haven’t run **Detoxify** yet, go to the **"Detoxify Classification"** option in the sidebar.  
+    - The model will analyze all comments and classify them according to their toxicity.  
+    - This process may take **several minutes**.  
+    - Once it’s finished, you can **download the resulting file** to check the new fields added.  
+                    
+    **3. Custom Model Classification**  
+    - Go to the **"Custom Model Classification"** tab in the sidebar.  
+    - Choose the column to be analyzed (**`message`**).  
+    - Provide a Hugging Face model ID (or leave the default).  
+    - Click **Start Classification** to begin.  
+    - At the end, you’ll be able to **download the classified file** with the results.  
+    ''')
+
 def comments_peak():
     st.title('Comments Peak')
     num_peaks = st.slider('Number of peaks on display', 1, 15, 5)

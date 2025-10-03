@@ -63,7 +63,7 @@ def landing_page():
     - Provide a Hugging Face model ID (or leave the default).  
     - Provide a name for the file with the results or leave the default (you dont need to download it).
     OBS: We only support JSON file output for now.
-    - Click **Start Classification** to begin.  
+    - Click **Start Classification** to begin. It may take **several minutes**.
     - [Optional] At the end, you’ll be able to **download the classified file** with the results.  
     
     **4. Model Comparisons**  
@@ -71,7 +71,7 @@ def landing_page():
     - This section allows you to compare the results from Detoxify and your custom model.
     - You must select the label(s) that indicate toxicity in your custom model (e.g. label_1 in the default model used).
     - You can see how many comments each model classified as toxic and where they agree or disagree.
-    - You can also download a file with the agreed toxic comments from both models.            
+    - You can also download a file with the comments both models classified as toxic.            
     ''')
 
 def comments_peak():

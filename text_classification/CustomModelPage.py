@@ -88,10 +88,10 @@ def custom_model_classification_page():
 
             # Store selected column in session state
             if 'selectedTextColumn' not in st.session_state:
-                st.session_state.selectedTextColumn = None
+                st.session_state['selectedTextColumn'] = None
 
             if selectedTextColumn:
-                st.session_state.selectedTextColumn = selectedTextColumn
+                st.session_state['selectedTextColumn'] = selectedTextColumn
                 st.success(f"✅ Comments data loaded successfully and target column selected: {selectedTextColumn}")
 
     st.markdown("---")
@@ -103,7 +103,7 @@ def custom_model_classification_page():
     st.markdown("Choose a Hugging Face model for text classification.")
 
     # Default model
-    defaultModel = "distilbert-base-uncased-finetuned-sst-2-english"
+    defaultModel = "zurawski/bertweetbr-binary-classifier-toldbr"
 
     # Check if model is loaded
     modelLoaded = (st.session_state.currentTaskInEdition.model is not None and
@@ -301,6 +301,15 @@ def custom_model_classification_page():
 
     st.markdown("---")
 
+    if modelLoaded:
+            # Obter as labels do modelo e armazenar no session_state
+            modelInfo = st.session_state.currentTaskInEdition.GetModelInfo()
+            print(modelInfo)
+            if 'labels' in modelInfo:
+                st.session_state['model_labels'] = modelInfo['labels']
+            else:
+                st.session_state['model_labels'] = []
+
     # =============================================================================
     # Step 3: Configuration and Execution
     # =============================================================================
@@ -324,7 +333,7 @@ def custom_model_classification_page():
         st.warning("⚠️ Text column not selected. Complete previous steps.")
         return
 
-    selectedTextColumn = st.session_state.selectedTextColumn
+    selectedTextColumn = st.session_state['selectedTextColumn']
 
     # Set Downloads folder as fixed output directory
     outputDirectory = str(pathlib.Path.home() / "Downloads")
@@ -457,6 +466,7 @@ def custom_model_classification_page():
 
         # Save results if successful
         if success and currentTask.outputDataset is not None:
+            st.session_state['comments_file'] = currentTask.outputDataset.to_dict(orient='records')
             try:
                 # Save in the selected format
                 if outputFormat == 'csv':

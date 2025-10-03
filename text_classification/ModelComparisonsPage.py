@@ -16,78 +16,41 @@ def model_comparisons_page():
     comments_list = st.session_state['comments_file']
     
     if 'selectedTextColumn' not in st.session_state or st.session_state['selectedTextColumn'] is None:
-        st.warning("⚠️ No text column selected. Please go to Custom Model page and select a text column first.")
-        return
-    
-    selected_column = st.session_state['selectedTextColumn']
-    
-    if 'currentTaskInEdition' not in st.session_state or st.session_state['currentTaskInEdition'] is None:
-        st.warning("⚠️ No custom model results found. Please run classification on Custom Model page first.")
-        return
-    
-    current_task = st.session_state['currentTaskInEdition']
-    
-    if current_task.outputDataset is None:
-        st.warning("⚠️ Custom model has not been executed yet. Please run classification on Custom Model page first.")
-        return
+        selected_column = "message"
+    else:
+        selected_column = st.session_state['selectedTextColumn']
 
     st.success(f"✅ Comparing results using column: **{selected_column}**")
     
-    detoxify_df = pd.DataFrame(comments_list)
-    custom_df = current_task.outputDataset
-    
+    if 'model_labels' in st.session_state and st.session_state['model_labels']:
+        st.markdown("### Select Toxic Labels for Custom Model")
+        selected_labels = st.multiselect(
+            "Select toxic labels:",
+            options=st.session_state['model_labels'],
+            default=[],
+            help="Choose which labels to include in the comparison"
+        )
+        st.session_state['selected_toxic_labels'] = selected_labels
+    else:
+        st.warning("⚠️ No labels found for the custom model. Please ensure the model provides label information.")
+        selected_labels = []
+        st.session_state['selected_toxic_labels'] = selected_labels
+
     st.markdown("### 📊 Data Overview")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Total Comments", len(detoxify_df))
+        st.metric("Total Comments", len(comments_list))
     
     with col2:
-
-        detoxify_toxic = 0
-        for c in comments_list:
-            try:
-                toxicity_value = float(c.get('toxicity', 0))
-                if toxicity_value >= 0.5:
-                    detoxify_toxic += 1
-            except (ValueError, TypeError):
-                continue
+        detoxify_toxic = sum(1 for c in comments_list if c.get('toxicity', 0) >= 0.5)
         st.metric("Detoxify Toxic (≥0.5)", detoxify_toxic)
     
     with col3:
-  
-        if 'predicted_label' in custom_df.columns:
-            custom_negative = len(custom_df[custom_df['predicted_label'].str.upper().isin(['NEGATIVE', 'NEG', 'TOXIC'])])
-            st.metric("Custom Model Negative", custom_negative)
-        else:
-            st.metric("Custom Model Results", "N/A")
+        custom_model_toxic = sum(1 for c in comments_list if c.get('predicted_label') in selected_labels)
+        st.metric("Custom Model Toxic", custom_model_toxic)
     
-
-    st.markdown("### Comparison Filters")
-    
-
-    toxicity_threshold = st.slider(
-        "Detoxify Toxicity Threshold:",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.5,
-        step=0.1,
-        help="Filter comments by Detoxify toxicity score"
-    )
-    
-    
-    detoxify_filtered = []
-    for c in comments_list:
-        try:
-            toxicity_value = float(c.get('toxicity', 0))
-            if toxicity_value >= toxicity_threshold:
-                detoxify_filtered.append(c)
-        except (ValueError, TypeError):
-            continue  
-    
-    st.info(f" Found **{len(detoxify_filtered)}** comments with Detoxify toxicity ≥ {toxicity_threshold}")
-
     # # === SEÇÃO 3: COMPARAÇÃO LADO A LADO ===
     # st.markdown("### 🔄 Side-by-Side Comparison")
     
@@ -199,119 +162,96 @@ def model_comparisons_page():
     
     json_data = []
     agreements = 0
-    total_compared = 0
+    total_compared = len(comments_list)
     
-    if 'predicted_label' in custom_df.columns and len(custom_df) > 0:
-        agreements = 0
-        total_compared = min(len(detoxify_filtered), len(custom_df))
-        
-        for i in range(total_compared):
-            if i < len(custom_df) and i < len(detoxify_filtered):
-                custom_result = custom_df.iloc[i]['predicted_label'].upper()
-                comment = detoxify_filtered[i]
-                custom_row = custom_df.iloc[i]
-                
-                try:
-                    toxicity_value = float(comment.get('toxicity', 0))
-                    detoxify_result = "TOXIC" if toxicity_value >= toxicity_threshold else "NON-TOXIC"
-                except (ValueError, TypeError):
-                    detoxify_result = "UNKNOWN"
-                    continue
+    for i, comment in enumerate(comments_list):
+        detoxify_result = "TOXIC" if comment.get('toxicity', 0) >= 0.5 else "NON-TOXIC"
+        custom_result = comment.get('predicted_label', 'N/A').upper()
 
-                models_agree = False
-                if detoxify_result != "UNKNOWN":
-                    if (custom_result in ['NEGATIVE', 'TOXIC'] and detoxify_result == "TOXIC") or \
-                    (custom_result in ['POSITIVE', 'NON-TOXIC'] and detoxify_result == "NON-TOXIC"):
-                        models_agree = True
-                        agreements += 1
+        models_agree = False
+        if (custom_result in selected_labels and detoxify_result == "TOXIC") or \
+           (custom_result not in selected_labels and detoxify_result == "NON-TOXIC"):
+            models_agree = True
+            agreements += 1
+            
+            comment_dict = {
+                "id": comment.get('id', f'comment_{i}'),
+                "author": comment.get('author', 'Unknown'),
+                "message": comment.get('message', ''),
+                "detoxify_toxicity": comment.get('toxicity', 0),
+                "sentiment": comment.get('sentiment', 'N/A'),
+                "custom_predicted_label": custom_result,
+                "detoxify_result": detoxify_result,
+                "custom_result": custom_result,
+                "models_agree": models_agree,
+            }
+            json_data.append(comment_dict)
 
-                    
-                    comment_dict = {
-                        "id": comment.get('id', f'comment_{i}'),
-                        "author": comment.get('author', 'Unknown'),
-                        "message": comment.get('message', ''),
-                        
-                        "detoxify_toxicity": comment.get('toxicity', 0),
-                        "detoxify_sentiment": comment.get('sentiment', 'N/A'),
-                        
-                        "custom_predicted_label": custom_row['predicted_label'],
-                        
-                        "detoxify_result": detoxify_result,
-                        "custom_result": custom_result,
-                        "models_agree": (models_agree),
-                    }
-                    
-                
-                
-                    json_data.append(comment_dict)
-        if json_data:         
-            json_string = json.dumps(json_data, indent=2, ensure_ascii=False)
-            st.download_button(
-                label = "Download Toxic Comments JSON",
-                data = json_string,
-                file_name = f"toxic_comments_{len(json_data)}_items.json",
-                mime = "application/json"
-            )
-        
-        if total_compared > 0:  
-            st.markdown("### 📊 Comparison Charts")
-        
-            disagreements = total_compared - agreements
-            
-            agreement_labels = ['Models Agree', 'Models Disagree'] 
-            agreement_values = [agreements, disagreements]
-            agreement_colors = ['#2ecc71', '#e74c3c']
-            
-            fig_agreement = go.Figure(data=[go.Pie(
-                labels=agreement_labels,
-                values=agreement_values,
-                hole=0.4,
-                marker_colors=agreement_colors,
-                textinfo='label+percent+value',
-                textfont_size=12,
-                hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-            )])
-            
-            fig_agreement.update_layout(
-                title={
-                    'text': 'Model Agreement vs Disagreement',
-                    'x': 0.5,
-                    'xanchor': 'center',
-                    'font': {'size': 16}
-                },
-                font=dict(size=14),
-                showlegend=True,
-                height=400,
-                margin=dict(t=60, b=20, l=20, r=20)
-            )
-            
-            st.plotly_chart(fig_agreement, use_container_width=True)
-            
-            
-            agreement_rate = (agreements / total_compared) * 100
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Total Compared", total_compared)
-            
-            with col2:
-                st.metric("Agreements", agreements)
-            
-            with col3:
-                st.metric("Agreement Rate", f"{agreement_rate:.1f}%")
-            
-            if agreement_rate >= 80:
-                st.success(f"High agreement rate: {agreement_rate:.1f}%")
-            elif agreement_rate >= 60:
-                st.warning(f"Moderate agreement rate: {agreement_rate:.1f}%")
-            else:
-                st.error(f"Low agreement rate: {agreement_rate:.1f}%")
-                
-            
-                
+    if json_data:
+        json_string = json.dumps(json_data, indent=2, ensure_ascii=False)
+        st.download_button(
+            label="Download Toxic Comments Agreed on Both Models JSON",
+            data=json_string,
+            file_name=f"toxic_comments_{len(json_data)}_items.json",
+            mime="application/json"
+        )
+
+    if total_compared > 0:  
+        st.markdown("### 📊 Comparison Charts")
     
-    
+        disagreements = total_compared - agreements
+        
+        agreement_labels = ['Models Agree', 'Models Disagree'] 
+        agreement_values = [agreements, disagreements]
+        agreement_colors = ['#2ecc71', '#e74c3c']
+        
+        fig_agreement = go.Figure(data=[go.Pie(
+            labels=agreement_labels,
+            values=agreement_values,
+            hole=0.4,
+            marker_colors=agreement_colors,
+            textinfo='label+percent+value',
+            textfont_size=12,
+            hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+        )])
+        
+        fig_agreement.update_layout(
+            title={
+                'text': 'Model Agreement vs Disagreement',
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': {'size': 16}
+            },
+            font=dict(size=14),
+            showlegend=True,
+            height=400,
+            margin=dict(t=60, b=20, l=20, r=20)
+        )
+        
+        st.plotly_chart(fig_agreement, use_container_width=True)
+        
+        
+        agreement_rate = (agreements / total_compared) * 100
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Compared", total_compared)
+        
+        with col2:
+            st.metric("Agreements", agreements)
+        
+        with col3:
+            st.metric("Agreement Rate", f"{agreement_rate:.1f}%")
+        
+        if agreement_rate >= 80:
+            st.success(f"High agreement rate: {agreement_rate:.1f}%")
+        elif agreement_rate >= 60:
+            st.warning(f"Moderate agreement rate: {agreement_rate:.1f}%")
+        else:
+            st.error(f"Low agreement rate: {agreement_rate:.1f}%")
+            
+
     st.markdown("---")
     st.markdown("### 💡 Tips for Comparison")
     st.info("""

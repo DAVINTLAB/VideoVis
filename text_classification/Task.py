@@ -247,6 +247,11 @@ class Task:
             "device": "GPU" if torch.cuda.is_available() and next(self.model.parameters()).is_cuda else "CPU"
         }
 
+        if self.model and hasattr(self.model.config, "id2label"):
+            info["labels"] = list(self.model.config.id2label.values())
+        else:
+            info["labels"] = []
+            
         return info
 
     # =============================================================================

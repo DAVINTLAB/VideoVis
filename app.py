@@ -1,6 +1,7 @@
 import os
 import json
 import streamlit as st
+from v1.main import comments_collect_visualization
 from v1.member_count import get_new_members
 from v1.nuvem import gerar_nuvem_palavras, file_to_json
 from v1.stats import get_top_authors, get_author_comments
@@ -192,7 +193,7 @@ def upload_json(json_file):
 
     st.session_state['comments_file'] = data
 
-pagina = st.sidebar.selectbox('Page', ['Upload Json','Detoxify Classification', 'Custom Model Classification', 'Model Comparisons', 'Comments peak', 'Top comment authors', 'Partitions', 'Stats', 'New members', 'Toxic Speech', 'Scream Index', 'Sentiment Analysis'])
+pagina = st.sidebar.selectbox('Page', ['Comments Collection', 'Upload Json','Detoxify Classification', 'Custom Model Classification', 'Model Comparisons', 'Comments peak', 'Top comment authors', 'Partitions', 'Stats', 'New members', 'Toxic Speech', 'Scream Index', 'Sentiment Analysis'])
 
 if pagina == 'Comments peak':
     comments_peak()
@@ -216,5 +217,7 @@ elif pagina == 'Detoxify Classification':
     detoxify_page()
 elif pagina == 'Model Comparisons':
     model_comparisons_page()
+elif pagina == 'Comments Collection':
+    comments_collect_visualization()
 else:
     landing_page()

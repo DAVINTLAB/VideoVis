@@ -4,14 +4,68 @@ from dotenv import load_dotenv
 import json
 import time
 import os
+import streamlit as st
 
 load_dotenv()
 API_KEY = os.getenv('GOOGLE_API_KEY')
 VIDEO_ID = os.getenv('VIDEO_ID')
 WAIT_TIME = 20  # Tempo de espera em segundos
 
+def comments_collect_visualization():
+    st.title('Comment Collection')
+    
+    api_key = st.text_input("API Key (Google)", type= "password", key= "google_api_key")
+    if api_key:
+        st.session_state['GOOGLE_API_KEY'] = api_key
+        
+    video_input = st.text_input("Youtube Video URL or ID", placeholder="https://youtube.com/watch?v=...")
+    
+    if "youtube.com" in video_input or "youtu.be" in video_input:
+        if "watch?v=" in video_input:
+            video_id = video_input.split("watch?v=")[1].split("&")[0]
+        elif "youtu.be/" in video_input:
+            video_id = video_input.split("youtu.be/")[1].split("?")[0]
+    else:
+        video_id = video_input
+    
+    if video_id:
+        st.session_state['VIDEO_ID'] = video_id
+        
+    if st.button("Start Collection", type = "secondary"):
+        if not api_key or not video_id:
+            st.error("Pleas provide both API Key and Video ID")
+        else:
+            st.session_state['GOOGLE_API_KEY'] = api_key
+            st.session_state['VIDEO_ID'] = video_id
+            
+            with st.spinner("Collecting comments..."):
+                live_chat_id, live_start_time_utc = get_live_details()
+                if live_chat_id and live_start_time_utc:
+                    new_comments = get_chat_messages(live_chat_id, live_start_time_utc)
+                    new_count = append_new_comments(new_comments)
+                    st.success(f" Collected and added {new_count} new comments")
+                else:
+                    st.error(" Could not get live details. Check if video is live.")
+                    
+        st.success(f" Collected {new_count} comments")
+        
+        # Adicionar botão de download
+        comments = load_existing_comments()
+        if comments:
+            json_string = json.dumps(comments, indent=2, ensure_ascii=False)
+            st.download_button(
+                label=" Download Collected Comments",
+                data=json_string,
+                file_name="comments.json",
+                mime="application/json"
+            )
+            
+
 def get_live_details():
-    url = f"https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id={VIDEO_ID}&key={API_KEY}"
+    api_key = st.session_state.get('GOOGLE_API_KEY')
+    video_id = st.session_state.get('VIDEO_ID')
+    
+    url = f"https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id={video_id}&key={api_key}"
     response = requests.get(url)
     data = response.json()
     
@@ -24,7 +78,8 @@ def get_live_details():
 
 def get_chat_messages(live_chat_id, live_start_time_utc):
     comments_list = []
-    chat_url = f"https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId={live_chat_id}&part=snippet,authorDetails&maxResults=200&key={API_KEY}"
+    api_key = st.session_state.get('GOOGLE_API_KEY')
+    chat_url = f"https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId={live_chat_id}&part=snippet,authorDetails&maxResults=200&key={api_key}"
     chat_response = requests.get(chat_url)
     chat_data = chat_response.json()
 
@@ -87,13 +142,17 @@ def append_new_comments(new_comments):
     return len(new_comments_filtered)  # Retorna a quantidade de novos comentários
 
 # Loop para coletar e salvar comentários
-while True:
-    live_chat_id, live_start_time_utc = get_live_details()
-    if live_chat_id and live_start_time_utc:
-        new_comments = get_chat_messages(live_chat_id, live_start_time_utc)
-        new_count = append_new_comments(new_comments)
-        print(f"Coletado e adicionado {new_count} novos comentários.")
-    else:
-        print("Não foi possível obter os detalhes da live ou o chat ao vivo. Verifique se o vídeo está ao vivo e se os detalhes estão disponíveis.")
-    
-    time.sleep(WAIT_TIME)
+#if __name__ == "__main__":
+#    try:
+#        while True:
+#            live_chat_id, live_start_time_utc = get_live_details()
+#            if live_chat_id and live_start_time_utc:
+#                new_comments = get_chat_messages(live_chat_id, live_start_time_utc)
+#                new_count = append_new_comments(new_comments)
+#                print(f"Coletado e adicionado {new_count} novos comentários.")
+#            else:
+#                print("Não foi possível obter os detalhes da live ou o chat ao vivo. Verifique se o vídeo está ao vivo e se os detalhes estão disponíveis.")
+            
+#            time.sleep(WAIT_TIME)
+#    except KeyboardInterrupt:
+#        print("\n Collection stopped by user")

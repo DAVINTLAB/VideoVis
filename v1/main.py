@@ -1,14 +1,10 @@
 import requests
 from dateutil import parser
-from dotenv import load_dotenv
 import json
 import time
 import os
 import streamlit as st
 
-load_dotenv()
-API_KEY = os.getenv('GOOGLE_API_KEY')
-VIDEO_ID = os.getenv('VIDEO_ID')
 WAIT_TIME = 20  # Tempo de espera em segundos
 
 def comments_collect_visualization():

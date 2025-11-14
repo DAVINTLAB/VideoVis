@@ -10,7 +10,7 @@ WAIT_TIME = 20  # Tempo de espera em segundos
 def comments_collect_visualization():
     st.title('Comment Collection')
     st.text(" If you already have a JSON file with comments, go to page 'Upload JSON' to upload it and skip this step.")
-    st.text(" Tutorial video to register and save the GOOGLE_API_KEY: https://youtu.be/j-Sq8qBPMqE ")
+    st.text(" Tutorial video to register and save the GOOGLE_API_KEY: https://youtu.be/d4gPrwpzTkc ")
     api_key = st.text_input("API Key (Google)", type= "password", key= "google_api_key")
     if api_key:
         st.session_state['GOOGLE_API_KEY'] = api_key

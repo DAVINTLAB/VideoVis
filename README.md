@@ -1,9 +1,9 @@
-# StreamVis-2.0
+# StreamVis-2.1
 ## ⚙️ Installation
 ##### Clone the repository
 ```bash
-git clone https://github.com/DAVINTLAB/StreamVis-2.0.git
-cd StreamVis-2.0
+git clone https://github.com/DAVINTLAB/StreamVis-2.1.git
+cd StreamVis-2.1
 ```
 
 ##### Setup venv (recommended):

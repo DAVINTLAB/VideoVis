@@ -132,6 +132,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+ambiente_youtube/
 ENV/
 env.bak/
 venv.bak/

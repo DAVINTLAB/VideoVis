@@ -39,7 +39,7 @@ def comments_collect_visualization():
         st.session_state['VIDEO_ID'] = video_id
 
     # Opção para iniciar do zero para este vídeo
-    start_fresh = st.checkbox("Start fresh for this video", value=False)
+    start_fresh = True
 
     if st.button("Start Collection", type = "secondary"):
         if not api_key or not video_id:
@@ -47,27 +47,38 @@ def comments_collect_visualization():
         else:
             st.session_state['GOOGLE_API_KEY'] = api_key
             st.session_state['VIDEO_ID'] = video_id
-            if start_fresh:
-                # Limpa o arquivo de comentários específico deste vídeo
-                save_comments([])
             
-            with st.spinner("Collecting comments..."):
-                live_chat_id, live_start_time_utc = get_live_details()
+            video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={api_key}"
+            video_response = requests.get(video_url)
+            video_data = video_response.json()
+            
+            if "items" in video_data and len(video_data["items"]) > 0:
+                live_broadcast_content = video_data["items"][0]["snippet"].get("liveBroadcastContent", "none")
                 
-                if live_chat_id and live_start_time_utc:
-                    st.info("Detected: Live stream")
-                    new_comments = get_chat_messages(live_chat_id, live_start_time_utc)
-                    new_count = append_new_comments(new_comments)
-                    st.success(f" Collected and added {new_count} new comments from live chat")
+                if live_broadcast_content == "live":
+                    st.error("Live videos are not supported. Please use a regular video or a finished live stream.")
+                    st.markdown("### For live stream analysis, visit:")
+                    st.markdown("[**StreamVis Live - Live Stream Analytics**](https://streamvis21.streamlit.app/)", unsafe_allow_html=True)
+                    st.markdown("*This tool supports real-time live stream comment collection and analysis.*")
+                    new_count = 0
                 else:
-                    st.info("Detected: Regular video (or finished live)")
-                    new_comments = get_video_comments()
-                    if new_comments is not None:
-                        new_count = append_new_comments(new_comments)
-                        st.success(f" Collected and added {new_count} new comments from video")
-                    else:
-                        st.error(" Could not retrieve comments. Check API Key and Video ID.")
-                        new_count = 0
+                    if start_fresh:
+                        # Limpa o arquivo de comentários específico deste vídeo
+                        save_comments([])
+            
+                    with st.spinner("Collecting comments..."):
+                        st.info("Detected: Regular video (or finished live)")
+                        new_comments = get_video_comments()
+                        if new_comments is not None:
+                            new_count = append_new_comments(new_comments)
+                            st.success(f" Collected and added {new_count} new comments from video")
+                        else:
+                            st.error(" Could not retrieve comments. Check API Key and Video ID.")
+                            new_count = 0
+            
+            else:
+                st.error("Video not found. Check API Key and Video ID.")
+                new_count = 0
         
         # Adicionar botão de download
         comments = load_existing_comments()
@@ -81,23 +92,6 @@ def comments_collect_visualization():
                 file_name=download_name,
                 mime="application/json"
             )
-            
-
-def get_live_details():
-    api_key = st.session_state.get('GOOGLE_API_KEY')
-    video_id = st.session_state.get('VIDEO_ID')
-    
-    url = f"https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id={video_id}&key={api_key}"
-    response = requests.get(url)
-    data = response.json()
-    
-    if "items" in data and len(data["items"]) > 0:
-        if "liveStreamingDetails" in data["items"][0]:
-            live_details = data["items"][0]["liveStreamingDetails"]
-            if "actualStartTime" in live_details:
-                live_start_time = live_details["actualStartTime"]
-                return live_details.get("activeLiveChatId"), parser.isoparse(live_start_time)
-    return None, None
 
 def get_video_comments():
     """Coleta comentários de vídeos regulares do YouTube"""
@@ -152,42 +146,6 @@ def get_video_comments():
         if not next_page_token:
             break
     
-    return comments_list
-
-def get_chat_messages(live_chat_id, live_start_time_utc):
-    """Coleta mensagens de chat ao vivo do YouTube"""
-    comments_list = []
-    api_key = st.session_state.get('GOOGLE_API_KEY')
-    chat_url = f"https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId={live_chat_id}&part=snippet,authorDetails&maxResults=200&key={api_key}"
-    chat_response = requests.get(chat_url)
-    chat_data = chat_response.json()
-
-    if "items" in chat_data:
-        for item in chat_data["items"]:
-            comment_id = item.get("id")
-            author = item["authorDetails"]["displayName"]
-            try:
-                message = item["snippet"]["displayMessage"]
-            except:
-                message = ""
-            timestamp = item["snippet"].get("publishedAt")
-            
-            if not timestamp or not comment_id:
-                continue # Ignora comentários sem timestamp ou ID - Podia dar problema sem
-
-            message_time_utc = parser.isoparse(timestamp)
-            
-            time_elapsed = message_time_utc - live_start_time_utc
-            
-            time_elapsed_str = str(time_elapsed).split('.')[0]
-            
-            comment_entry = {
-                "id": comment_id,
-                "time_elapsed": time_elapsed_str,
-                "author": author,
-                "message": message
-            }
-            comments_list.append(comment_entry)
     return comments_list
 
 def load_existing_comments():

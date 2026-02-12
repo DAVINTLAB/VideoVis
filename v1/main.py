@@ -93,26 +93,63 @@ def comments_collect_visualization():
                 mime="application/json"
             )
 
-def get_video_comments():
-    """Coleta comentários de vídeos regulares do YouTube"""
-    comments_list = []
-    api_key = st.session_state.get('GOOGLE_API_KEY')
-    video_id = st.session_state.get('VIDEO_ID')
-    
-    video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={api_key}"
+def get_video_metadata(video_id, api_key):
+    """Coleta metadados do vídeo (visualizações, likes, etc)"""
+    video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={video_id}&key={api_key}"
     video_response = requests.get(video_url)
     video_data = video_response.json()
     
     if "items" not in video_data or len(video_data["items"]) == 0:
         return None
     
-    video_publish_time = video_data["items"][0]["snippet"]["publishedAt"]
+    video_item = video_data["items"][0]
+    metadata = {
+        "video_id": video_id,
+        "title": video_item.get("snippet", {}).get("title", ""),
+        "viewCount": int(video_item.get("statistics", {}).get("viewCount", 0)),
+        "likeCount": int(video_item.get("statistics", {}).get("likeCount", 0)),
+        "commentCount": int(video_item.get("statistics", {}).get("commentCount", 0)),
+    }
+    return metadata
+
+def save_video_metadata(metadata):
+    """Salva metadados do vídeo em arquivo"""
+    if metadata:
+        metadata_file = f"video_metadata_{metadata['video_id']}.json"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=4)
+
+def get_video_comments():
+    """Coleta comentários de vídeos regulares do YouTube"""
+    comments_list = []
+    api_key = st.session_state.get('GOOGLE_API_KEY')
+    video_id = st.session_state.get('VIDEO_ID')
+    
+    video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={video_id}&key={api_key}"
+    video_response = requests.get(video_url)
+    video_data = video_response.json()
+    
+    if "items" not in video_data or len(video_data["items"]) == 0:
+        return None
+    
+    # Salvar metadados do vídeo
+    video_item = video_data["items"][0]
+    metadata = {
+        "video_id": video_id,
+        "title": video_item.get("snippet", {}).get("title", ""),
+        "viewCount": int(video_item.get("statistics", {}).get("viewCount", 0)),
+        "likeCount": int(video_item.get("statistics", {}).get("likeCount", 0)),
+        "commentCount": int(video_item.get("statistics", {}).get("commentCount", 0)),
+    }
+    save_video_metadata(metadata)
+    
+    video_publish_time = video_item["snippet"]["publishedAt"]
     video_start_time_utc = parser.isoparse(video_publish_time)
     
     next_page_token = None
     
     while True:
-        comments_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={video_id}&maxResults=100&key={api_key}"
+        comments_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId={video_id}&maxResults=100&key={api_key}"
         
         if next_page_token:
             comments_url += f"&pageToken={next_page_token}"
@@ -129,6 +166,8 @@ def get_video_comments():
             author = comment["authorDisplayName"]
             message = comment["textDisplay"]
             timestamp = comment["publishedAt"]
+            likes = comment.get("likeCount", 0)
+            replies = item["snippet"].get("totalReplyCount", 0)
             
             comment_time_utc = parser.isoparse(timestamp)
             time_elapsed = comment_time_utc - video_start_time_utc
@@ -138,7 +177,9 @@ def get_video_comments():
                 "id": comment_id,
                 "time_elapsed": time_elapsed_str,
                 "author": author,
-                "message": message
+                "message": message,
+                "likeCount": likes,
+                "replyCount": replies
             }
             comments_list.append(comment_entry)
         
@@ -147,6 +188,15 @@ def get_video_comments():
             break
     
     return comments_list
+
+def load_video_metadata(video_id):
+    """Carrega metadados do vídeo do arquivo"""
+    metadata_file = f"video_metadata_{video_id}.json"
+    try:
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
 
 def load_existing_comments():
     try:

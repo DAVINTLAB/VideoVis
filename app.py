@@ -1,12 +1,12 @@
 import os
 import json
+import glob
+from collections import Counter
 import streamlit as st
-from v1.main import comments_collect_visualization
+from v1.main import comments_collect_visualization, load_video_metadata
 from v1.member_count import get_new_members
 from v1.nuvem import gerar_nuvem_palavras, file_to_json
 from v1.stats import get_top_authors, get_author_comments
-from v1.particoes import get_partitions
-from v1.peaks import get_peaks, get_top_words, get_word_context
 import plotly.graph_objects as go
 from v2.app_pages.scream_index.scream_index import scream_index_page
 from v2.app_pages.sentiment.sentiment_analysis import sentiment_analysis_page
@@ -14,21 +14,14 @@ from v2.app_pages.toxic.toxic_types import toxic_types_page
 from v2.output.counts.sentiment_type_counts import count_sentiment_types
 from v2.output.counts.toxic_type_counts import count_toxic_types
 from text_classification.CustomModelPage import custom_model_classification_page
-from text_classification.DetoxifyPage import detoxify_page
+from text_classification.ClassificationPage import classification_page
 from text_classification.ModelComparisonsPage import model_comparisons_page
 
 st.set_page_config(
-    page_title='StreamVis',
+    page_title='VideoVis',
     page_icon='📊',
     layout='wide'
 )
-
-if st.session_state.get('comments_file') is None:
-    with open('input/comments.json', encoding='utf-8') as json_file:
-        st.session_state['comments_file'] = json.load(json_file)
-
-if st.session_state.get('partitions') is None:
-    st.session_state['partitions'] = get_partitions(st.session_state['comments_file'])
 
 UPLOAD_DIR = 'input'
 
@@ -36,7 +29,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 def landing_page():
-    st.title('StreamVis')
+    st.title('VideoVis')
 
     st.write('Select one of the options on the sidebar to start analyzing the comments')
 
@@ -52,8 +45,8 @@ def landing_page():
     **1. Upload a JSON File**  
     - Click the *Browse Files* button above to upload a JSON file.
                     
-    **2. Run Detoxify (toxicity classification)**  
-    - If you haven’t run **Detoxify** yet, go to the **"Detoxify Classification"** option in the sidebar.  
+    **2. Run Classification (toxicity classification)**  
+    - If you haven’t run **Classification** yet, go to the **"Classification"** option in the sidebar.  
     - The model will analyze all comments and classify them according to their toxicity.  
     - This process may take **several minutes**.  
     - Once it’s finished, you can **download the resulting file** to check the new fields added.  
@@ -75,53 +68,96 @@ def landing_page():
     - You can also download a file with the comments both models classified as toxic.            
     ''')
 
-def comments_peak():
-    st.title('Comments Peak')
-    num_peaks = st.slider('Number of peaks on display', 1, 15, 5)
-    peaks, image_path = get_peaks(st.session_state['comments_file'], top=num_peaks)
-    st.image(image_path)
-    for index, peak in enumerate(peaks):
-        with st.expander(f'Peak {index+1}: {peak["comments"]} comments'):
-            st.write(f'Start: {peak["start"]}')
-            st.write(f'End: {peak["end"]}')
-            st.image(gerar_nuvem_palavras(peak['messages'], complemento=f'_pico_{index}'))
-            top_words_count = get_top_words(peak['messages'], n = 50)
-            top_words = top_words_count.index.to_list()
-            word = st.selectbox('Top words', top_words)
-
-            st.write(get_word_context(peak['messages'], word))
-
 def most_comments():
-    st.title('Top commenters')
-    n_authors = st.slider('Number of commenters on display', 1, 10, 5)
-    if st.session_state['comments_file'] is not None:
-        authors = get_top_authors(st.session_state['comments_file'], n=n_authors)
-        for author, count in authors:
-            with st.expander(f'{author}: {count} comments'):
-                path, comments = get_author_comments(author, st.session_state['comments_file'])
-                st.image(path)
-                for comment in comments:
-                    st.write(f"{comment['time_elapsed']} - {comment['message']}")
-
-def show_partitions():
-    st.title('Partitions')
-    num_part = st.slider('Number of partitions on display', 1, 10, 5)
-    st.session_state['partitions'] = get_partitions(st.session_state['comments_file'], n=num_part)
-    for index, partition in st.session_state['partitions'].items():
-        with st.expander(f'Partition {index+1}'):
-            st.write(f'Comments: {len(partition["comments"])}')
-            st.write(f'Start: {partition["start"]}')
-            st.write(f'End: {partition["end"]}')
-            st.image(gerar_nuvem_palavras(partition['comments'], complemento=f'_particao_{index}'))
-            top_words_count = get_top_words(partition['comments'])
-            top_words = top_words_count.index.to_list()
-            word = st.selectbox('Top words', top_words)
-
-            st.write(get_word_context(partition['comments'], word))
+    st.title('Top Comments')
+    if st.session_state.get('comments_file') is None:
+        st.warning('Please upload a comments.json file first in the "Upload Json" page')
+        return
+    
+    comments_data = st.session_state['comments_file']
+    
+    # Tab 1: Top 10 comentários com mais likes (se existir o campo)
+    tab1, tab2, tab3, tab4 = st.tabs(["Top Comments by Likes", "Top Comments by Replies", "Most Used Words", "Top Authors"])
+    
+    with tab1:
+        st.subheader("Top 10 Comments by Likes")
+        # Verificar se existe campo de likes/likeCount
+        comments_with_likes = [c for c in comments_data if 'likeCount' in c or 'likes' in c]
+        if comments_with_likes:
+            # Ordenar por likes
+            sorted_comments = sorted(comments_with_likes, 
+                                   key=lambda x: int(x.get('likeCount', x.get('likes', 0))), 
+                                   reverse=True)[:10]
+            for idx, comment in enumerate(sorted_comments, 1):
+                likes = comment.get('likeCount', comment.get('likes', 0))
+                st.write(f"**{idx}. {comment['author']}** ({likes} likes)")
+                st.write(f"*{comment['time_elapsed']}*")
+                st.write(f"> {comment['message']}")
+                st.divider()
+        else:
+            st.info("Comments data does not contain likes information")
+    
+    with tab2:
+        st.subheader("Top Comments by Replies")
+        # Verificar se existe campo de replies/replyCount
+        comments_with_replies = [c for c in comments_data if 'replyCount' in c or 'replies' in c]
+        if comments_with_replies:
+            # Ordenar por replies
+            sorted_comments = sorted(comments_with_replies, 
+                                   key=lambda x: int(x.get('replyCount', x.get('replies', 0))), 
+                                   reverse=True)[:10]
+            for idx, comment in enumerate(sorted_comments, 1):
+                replies = comment.get('replyCount', comment.get('replies', 0))
+                st.write(f"**{idx}. {comment['author']}** ({replies} replies)")
+                st.write(f"*{comment['time_elapsed']}*")
+                st.write(f"> {comment['message']}")
+                st.divider()
+        else:
+            st.info("Comments data does not contain replies information")
+    
+    with tab3:
+        st.subheader("Most Used Words in Comments")
+        # Contar palavras
+        all_words = []
+        for comment in comments_data:
+            words = comment['message'].lower().split()
+            # Remover palavras muito curtas e comuns
+            words = [w for w in words if len(w) > 3]
+            all_words.extend(words)
+        
+        # Contar frequência
+        word_counts = Counter(all_words)
+        top_20_words = word_counts.most_common(20)
+        
+        if top_20_words:
+            # Criar colunas para melhor visualização
+            col1, col2 = st.columns(2)
+            for idx, (word, count) in enumerate(top_20_words):
+                if idx % 2 == 0:
+                    with col1:
+                        st.write(f"**{word}**: {count}")
+                else:
+                    with col2:
+                        st.write(f"**{word}**: {count}")
+        else:
+            st.info("No words found")
+    
+    with tab4:
+        st.subheader("Top Authors")
+        n_authors = st.slider('Number of authors to display', 1, 20, 10)
+        authors = get_top_authors(comments_data, n=n_authors)
+        
+        if authors:
+            for idx, (author, count) in enumerate(authors, 1):
+                st.write(f"**{idx}. {author}**: {count} comments")
+        else:
+            st.info("No authors found")
 
 def show_stats():
     st.title('Key Stats')
-
+    if st.session_state.get('comments_file') is None:
+        st.warning('Please upload a comments.json file first in the "Upload Json" page')
+        return
     comments_data = st.session_state['comments_file']
 
     total_comments = len(comments_data)
@@ -136,8 +172,27 @@ def show_stats():
     else:
         new_members_count = 0
 
-    total_positive, total_neutral, total_negative = count_sentiment_types(st.session_state['comments_file']).values()
+    sentiment_counts = count_sentiment_types(st.session_state['comments_file'])
+    total_positive = sentiment_counts.get('POS', 0)
+    total_neutral = sentiment_counts.get('NEU', 0)
+    total_negative = sentiment_counts.get('NEG', 0)
     total_toxic = count_toxic_types(st.session_state['comments_file']).get('toxicity', 0)
+
+    # Tenta carregar metadados do vídeo
+    video_metadata = None
+    video_id = st.session_state.get('VIDEO_ID')
+    if video_id:
+        video_metadata = load_video_metadata(video_id)
+    
+    # Se não encontrou por VIDEO_ID, procura por arquivos de metadados existentes
+    if not video_metadata:
+        metadata_files = glob.glob("video_metadata_*.json")
+        if metadata_files:
+            try:
+                with open(metadata_files[0], 'r', encoding='utf-8') as f:
+                    video_metadata = json.load(f)
+            except:
+                video_metadata = None
 
     def create_card(title, value, card_color="lightgray", text_color="black"):
         fig = go.Figure(go.Indicator(
@@ -155,35 +210,38 @@ def show_stats():
         )
         return fig
 
+    # Primeira linha - Video Views, Total Comments, Total Authors
     col1, col2, col3 = st.columns(3)
-
     with col1:
-        st.plotly_chart(create_card("Total Comments", total_comments, card_color="lightblue", text_color="darkblue"), use_container_width=True)
-        st.plotly_chart(create_card("Total Words", total_words, card_color="lightgreen", text_color="darkgreen"), use_container_width=True)
-        st.plotly_chart(create_card("Positive Sentiment Comments %", (total_positive / total_comments) * 100, card_color="lightgreen", text_color="darkgreen"), use_container_width=True)
-        st.plotly_chart(create_card("Toxic Comments %", (total_toxic / total_comments) * 100, card_color="red", text_color="white"), use_container_width=True)
-
+        if video_metadata and 'viewCount' in video_metadata:
+            st.plotly_chart(create_card("Video Views", video_metadata['viewCount'], card_color="plum", text_color="purple"), use_container_width=True)
     with col2:
+        st.plotly_chart(create_card("Total Comments", total_comments, card_color="lightblue", text_color="darkblue"), use_container_width=True)
+    with col3:
         st.plotly_chart(create_card("Total Authors", total_authors, card_color="lightyellow", text_color="darkorange"), use_container_width=True)
-        st.plotly_chart(create_card("Unique Words", unique_words, card_color="lightpink", text_color="darkred"), use_container_width=True)
-        st.plotly_chart(create_card("Neutral Sentiment Comments %", (total_neutral / total_comments) * 100, card_color="lightyellow", text_color="darkorange"), use_container_width=True)
 
+    # Segunda linha - Total Words, Unique Words, Avg Comments/Person
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.plotly_chart(create_card("Total Words", total_words, card_color="lightgreen", text_color="darkgreen"), use_container_width=True)
+    with col2:
+        st.plotly_chart(create_card("Unique Words", unique_words, card_color="lightpink", text_color="darkred"), use_container_width=True)
     with col3:
         st.plotly_chart(create_card("Avg Comments/Person", avg_comments_per_person, card_color="lightgray", text_color="black"), use_container_width=True)
-        st.plotly_chart(create_card("New Members", new_members_count, card_color="lightgray", text_color="black"), use_container_width=True)
+
+    # Terceira linha - Positive, Neutral, Negative Sentiment Comments
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.plotly_chart(create_card("Positive Sentiment Comments %", (total_positive / total_comments) * 100, card_color="lightgreen", text_color="darkgreen"), use_container_width=True)
+    with col2:
+        st.plotly_chart(create_card("Neutral Sentiment Comments %", (total_neutral / total_comments) * 100, card_color="lightyellow", text_color="darkorange"), use_container_width=True)
+    with col3:
         st.plotly_chart(create_card("Negative Sentiment Comments %", (total_negative / total_comments) * 100, card_color="red", text_color="white"), use_container_width=True)
 
-def show_new_members():
-    st.title('Members')
-    member_data = st.session_state['comments_file']
-    path, members = get_new_members(member_data)
-    if path is not None:
-        st.image(path)
-        with st.expander('New members', expanded=True):
-            for member in members:
-                st.write(f'{member["author"]} - {member["time_elapsed"]}')
-    else:
-        st.write('No new members found')
+    # Quarta linha - Toxic Comments
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.plotly_chart(create_card("Toxic Comments %", (total_toxic / total_comments) * 100, card_color="red", text_color="white"), use_container_width=True)
 
 def upload_json(json_file):
     if json_file is None:
@@ -193,18 +251,12 @@ def upload_json(json_file):
 
     st.session_state['comments_file'] = data
 
-pagina = st.sidebar.selectbox('Page', ['Comments Collection', 'Upload Json','Detoxify Classification', 'Custom Model Classification', 'Model Comparisons', 'Comments peak', 'Top comment authors', 'Partitions', 'Stats', 'New members', 'Toxic Speech', 'Scream Index', 'Sentiment Analysis'])
+pagina = st.sidebar.selectbox('Page', ['Comments Collection', 'Upload Json','Classification', 'Custom Model Classification', 'Model Comparisons', 'Top Comments', 'Stats', 'Toxic Speech', 'Scream Index', 'Sentiment Analysis'])
 
-if pagina == 'Comments peak':
-    comments_peak()
-elif pagina == 'Top comment authors':
+if pagina == 'Top Comments':
     most_comments()
-elif pagina == 'Partitions':
-    show_partitions()
 elif pagina == 'Stats':
     show_stats()
-elif pagina == 'New members':
-    show_new_members()
 elif pagina == 'Toxic Speech':
     toxic_types_page()
 elif pagina == 'Scream Index':
@@ -213,8 +265,8 @@ elif pagina == 'Sentiment Analysis':
     sentiment_analysis_page()
 elif pagina == 'Custom Model Classification':
     custom_model_classification_page()
-elif pagina == 'Detoxify Classification':
-    detoxify_page()
+elif pagina == 'Classification':
+    classification_page()
 elif pagina == 'Model Comparisons':
     model_comparisons_page()
 elif pagina == 'Comments Collection':

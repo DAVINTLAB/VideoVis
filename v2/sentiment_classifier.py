@@ -27,4 +27,3 @@ with open(ARQUIVO, "w", encoding="utf-8") as f:
 
 print(f"\nClassificação concluída. Total de comentários processados: {len(comentarios)}")
 print(f"Modificacoes salvas em: {ARQUIVO}")
-

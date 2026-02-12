@@ -3,6 +3,8 @@ import json
 import glob
 from collections import Counter
 import streamlit as st
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 from v1.main import comments_collect_visualization, load_video_metadata
 from v1.member_count import get_new_members
 from v1.nuvem import gerar_nuvem_palavras, file_to_json
@@ -80,7 +82,7 @@ def most_comments():
     tab1, tab2, tab3, tab4 = st.tabs(["Top Comments by Likes", "Top Comments by Replies", "Most Used Words", "Top Authors"])
     
     with tab1:
-        st.subheader("Top 10 Comments by Likes")
+        st.subheader("Top Comments by Likes")
         # Verificar se existe campo de likes/likeCount
         comments_with_likes = [c for c in comments_data if 'likeCount' in c or 'likes' in c]
         if comments_with_likes:
@@ -91,7 +93,6 @@ def most_comments():
             for idx, comment in enumerate(sorted_comments, 1):
                 likes = comment.get('likeCount', comment.get('likes', 0))
                 st.write(f"**{idx}. {comment['author']}** ({likes} likes)")
-                st.write(f"*{comment['time_elapsed']}*")
                 st.write(f"> {comment['message']}")
                 st.divider()
         else:
@@ -107,11 +108,32 @@ def most_comments():
                                    key=lambda x: int(x.get('replyCount', x.get('replies', 0))), 
                                    reverse=True)[:10]
             for idx, comment in enumerate(sorted_comments, 1):
-                replies = comment.get('replyCount', comment.get('replies', 0))
-                st.write(f"**{idx}. {comment['author']}** ({replies} replies)")
-                st.write(f"*{comment['time_elapsed']}*")
-                st.write(f"> {comment['message']}")
-                st.divider()
+                replies_count = comment.get('replyCount', 0)
+                replies_list = comment.get('replies', [])
+                actual_replies = len(replies_list)
+                
+                # Label mostrando quantos replies estão disponíveis
+                if actual_replies < replies_count:
+                    label = f"**{idx}. {comment['author']}** ({actual_replies} of {replies_count} replies)"
+                else:
+                    label = f"**{idx}. {comment['author']}** ({replies_count} replies)"
+                
+                with st.expander(label):
+                    st.write(f"> {comment['message']}")
+                    
+                    if replies_count > 0:
+                        st.subheader("Replies:")
+                        if replies_list:
+                            for reply in replies_list:
+                                st.write(f"**{reply['author']}** 👍 {reply.get('likes', 0)}")
+                                st.write(f"> {reply['message']}")
+                                st.divider()
+                            if actual_replies < replies_count:
+                                st.caption(f"Note: Only {actual_replies} of {replies_count} total replies are displayed (API limitation)")
+                        else:
+                            st.info("No replies data available")
+                    else:
+                        st.info("No replies yet")
         else:
             st.info("Comments data does not contain replies information")
     
@@ -134,11 +156,65 @@ def most_comments():
             col1, col2 = st.columns(2)
             for idx, (word, count) in enumerate(top_20_words):
                 if idx % 2 == 0:
-                    with col1:
-                        st.write(f"**{word}**: {count}")
+                    col = col1
                 else:
-                    with col2:
-                        st.write(f"**{word}**: {count}")
+                    col = col2
+                
+                with col:
+                    with st.expander(f"**{word}**: {count} occurrences"):
+                        # Encontrar comentários que contêm essa palavra (palavra exata)
+                        comments_with_word = []
+                        for c in comments_data:
+                            words_in_comment = c['message'].lower().split()
+                            if word in words_in_comment:
+                                comments_with_word.append(c)
+                        
+                        st.write(f"Found in {len(comments_with_word)} comments:")
+                        
+                        # Key única para cada palavra
+                        key = f"show_all_{word}_{idx}"
+                        
+                        # Inicializar o estado se não existir
+                        if key not in st.session_state:
+                            st.session_state[key] = False
+                        
+                        # Mostrar primeiros 5 ou todos
+                        if st.session_state[key]:
+                            # Mostrar todos
+                            for comment in comments_with_word:
+                                st.write(f"- **{comment['author']}**: {comment['message']}")
+                                st.divider()
+                            if st.button("Hide All", key=f"hide_{key}"):
+                                st.session_state[key] = False
+                                st.rerun()
+                        else:
+                            # Mostrar primeiros 5
+                            for comment in comments_with_word[:5]:
+                                st.write(f"- **{comment['author']}**: {comment['message']}")
+                                st.divider()
+                            
+                            # Mostrar botão "See All" se houver mais de 5
+                            if len(comments_with_word) > 5:
+                                if st.button(f"See All ({len(comments_with_word)} total)", key=f"see_all_{key}"):
+                                    st.session_state[key] = True
+                                    st.rerun()
+            
+            # Word Cloud
+            st.divider()
+            st.subheader("Word Cloud Visualization")
+            
+            # Criar word cloud
+            text = ' '.join(all_words)
+            if text:
+                wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
+                
+                # Plotar com matplotlib
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.imshow(wordcloud, interpolation='bilinear')
+                ax.axis('off')
+                st.pyplot(fig)
+            else:
+                st.info("Not enough words to generate word cloud")
         else:
             st.info("No words found")
     
@@ -149,7 +225,15 @@ def most_comments():
         
         if authors:
             for idx, (author, count) in enumerate(authors, 1):
-                st.write(f"**{idx}. {author}**: {count} comments")
+                with st.expander(f"**{idx}. {author}**: {count} comments"):
+                    # Encontrar todos os comentários desse autor
+                    author_comments = [c for c in comments_data if c['author'] == author]
+                    for comment in author_comments:
+                        likes = comment.get('likeCount', 0)
+                        replies = comment.get('replyCount', 0)
+                        st.write(f"**{comment['message']}**")
+                        st.caption(f"{likes} likes | {replies} replies")
+                        st.divider()
         else:
             st.info("No authors found")
 

@@ -167,11 +167,22 @@ def get_video_comments():
             message = comment["textDisplay"]
             timestamp = comment["publishedAt"]
             likes = comment.get("likeCount", 0)
-            replies = item["snippet"].get("totalReplyCount", 0)
+            replies_count = item["snippet"].get("totalReplyCount", 0)
             
             comment_time_utc = parser.isoparse(timestamp)
             time_elapsed = comment_time_utc - video_start_time_utc
             time_elapsed_str = str(time_elapsed).split('.')[0]
+            
+            # Coletar respostas (replies)
+            replies_list = []
+            if "replies" in item and replies_count > 0:
+                for reply in item["replies"]["comments"]:
+                    reply_snippet = reply["snippet"]
+                    replies_list.append({
+                        "author": reply_snippet["authorDisplayName"],
+                        "message": reply_snippet["textDisplay"],
+                        "likes": reply_snippet.get("likeCount", 0)
+                    })
             
             comment_entry = {
                 "id": comment_id,
@@ -179,7 +190,8 @@ def get_video_comments():
                 "author": author,
                 "message": message,
                 "likeCount": likes,
-                "replyCount": replies
+                "replyCount": replies_count,
+                "replies": replies_list
             }
             comments_list.append(comment_entry)
         

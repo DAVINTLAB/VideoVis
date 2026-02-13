@@ -42,11 +42,11 @@ def scream_index_page():
 
     st.title('Scream Index Analysis')
     st.plotly_chart(create_gauge_chart(
-        "Scream index mean",
+        "Scream Index Mean",
         scream_index_mean(st.session_state['comments_file'])
     ), use_container_width=True)
     
-    with st.expander("Messages above 0.7 scream index", expanded=True):
+    with st.expander("Messages above 0.7 on Scream Index", expanded=True):
         data = st.session_state['comments_file']
         scream_indices = [obj for obj in data if obj.get('scream_index', 0) > 0.70]
         st.dataframe(
@@ -54,7 +54,7 @@ def scream_index_page():
             use_container_width=True
         )
 
-    st.title('Top Commenters by Scream Index')
+    st.title('Top Authors by Scream Index')
 
     data = st.session_state['comments_file']
     commenters = {}
@@ -66,7 +66,6 @@ def scream_index_page():
         commenters[commenter].append(obj)
     sorted_commenters = sorted(commenters.items(), key=lambda x: len(x[1]), reverse=True)
     top_commenters = sorted_commenters[:10]
-    st.write("Top 10 commenters by Scream Index:")
     for commenter, comments in top_commenters:
         st.write(f"{commenter}: {len(comments)} comments")
         with st.expander(f"Comments by {commenter}", expanded=False):

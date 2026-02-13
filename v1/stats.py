@@ -1,7 +1,3 @@
-import json
-from matplotlib import pyplot as plt
-from matplotlib import dates as mdates
-import pandas as pd
 from collections import Counter
 
 def get_author_comments(author, data, interval=30):
@@ -11,27 +7,7 @@ def get_author_comments(author, data, interval=30):
             author_comments.append(item)
     
     author_filtered_comments = [comment for comment in author_comments if comment['message'].strip()]
-
-    df = pd.DataFrame(author_filtered_comments)
-    df['timestamp'] = pd.to_datetime(df['time_elapsed'], format='%H:%M:%S', errors='coerce')
-    df.set_index('timestamp', inplace=True)
-    resampled_df = df.resample(f'{interval}min').size()
-
-    plt.figure(figsize=(14, 6))
-    plt.plot(resampled_df.index, resampled_df.values)
-    plt.xlabel('Time')
-    plt.ylabel('Comments')
-    plt.title(f'Comments each {interval} minutes')
-
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-
-    plt.grid(True)
-
-    path = f'v1/output/comentarios_{author}_por_minuto.png'
-
-    plt.savefig(path)
-
-    return path, author_filtered_comments
+    return None, author_filtered_comments
 
 def get_top_authors(data, n=5):
     filter_data = [item for item in data if item['message'].strip()]

@@ -1,12 +1,13 @@
 import os
 import json
 import glob
+import html
+import re
 from collections import Counter
 import streamlit as st
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from v1.main import comments_collect_visualization, load_video_metadata
-from v1.member_count import get_new_members
 from v1.nuvem import gerar_nuvem_palavras, file_to_json
 from v1.stats import get_top_authors, get_author_comments
 import plotly.graph_objects as go
@@ -137,12 +138,17 @@ def most_comments():
         else:
             st.info("Comments data does not contain replies information")
     
+    def normalize_comment_text(text):
+        unescaped = html.unescape(text)
+        cleaned = re.sub(r"[^\w]+", " ", unescaped, flags=re.UNICODE)
+        return cleaned.lower().strip()
+
     with tab3:
         st.subheader("Most Used Words in Comments")
         # Contar palavras
         all_words = []
         for comment in comments_data:
-            words = comment['message'].lower().split()
+            words = normalize_comment_text(comment['message']).split()
             # Remover palavras muito curtas e comuns
             words = [w for w in words if len(w) > 3]
             all_words.extend(words)
@@ -165,7 +171,7 @@ def most_comments():
                         # Encontrar comentários que contêm essa palavra (palavra exata)
                         comments_with_word = []
                         for c in comments_data:
-                            words_in_comment = c['message'].lower().split()
+                            words_in_comment = normalize_comment_text(c['message']).split()
                             if word in words_in_comment:
                                 comments_with_word.append(c)
                         
@@ -246,15 +252,10 @@ def show_stats():
 
     total_comments = len(comments_data)
     total_authors = len(set([comment["author"] for comment in comments_data]))
-    avg_comments_per_person = total_comments / total_authors
+    avg_comments_per_person = round(total_comments / total_authors, 2)
     total_words = sum([len(comment["message"].split()) for comment in comments_data])
     unique_words = len(set([word for comment in comments_data for word in comment["message"].split()]))
     avg_words_per_comment = total_words / total_comments
-    _, new_mem = get_new_members(comments_data)
-    if new_mem is not None:
-        new_members_count = len(new_mem)
-    else:
-        new_members_count = 0
 
     sentiment_counts = count_sentiment_types(st.session_state['comments_file'])
     total_positive = sentiment_counts.get('POS', 0)
@@ -263,9 +264,9 @@ def show_stats():
     total_toxic = count_toxic_types(st.session_state['comments_file']).get('toxicity', 0)
 
     # Tenta carregar metadados do vídeo
-    video_metadata = None
+    video_metadata = st.session_state.get('video_metadata')
     video_id = st.session_state.get('VIDEO_ID')
-    if video_id:
+    if not video_metadata and video_id:
         video_metadata = load_video_metadata(video_id)
     
     # Se não encontrou por VIDEO_ID, procura por arquivos de metadados existentes

@@ -1,8 +1,9 @@
 import requests
-from dateutil import parser
 import json
 import time
 import os
+import html
+import re
 import streamlit as st
 
 WAIT_TIME = 20  # Tempo de espera em segundos
@@ -142,11 +143,48 @@ def get_video_comments():
         "commentCount": int(video_item.get("statistics", {}).get("commentCount", 0)),
     }
     save_video_metadata(metadata)
-    
-    video_publish_time = video_item["snippet"]["publishedAt"]
-    video_start_time_utc = parser.isoparse(video_publish_time)
+    st.session_state['video_metadata'] = metadata
     
     next_page_token = None
+
+    def sanitize_message(text):
+        if not text:
+            return ""
+        unescaped = html.unescape(text)
+        unescaped = re.sub(r"<a\s+[^>]*>(.*?)</a>", r"\1", unescaped, flags=re.IGNORECASE)
+        return re.sub(r"<[^>]+>", "", unescaped).strip()
+
+    def fetch_all_replies(parent_comment_id, api_key_value):
+        replies = []
+        next_reply_token = None
+
+        while True:
+            replies_url = (
+                "https://www.googleapis.com/youtube/v3/comments"
+                f"?part=snippet&parentId={parent_comment_id}&maxResults=100&key={api_key_value}"
+            )
+            if next_reply_token:
+                replies_url += f"&pageToken={next_reply_token}"
+
+            replies_response = requests.get(replies_url)
+            replies_data = replies_response.json()
+
+            if "items" not in replies_data:
+                break
+
+            for reply in replies_data["items"]:
+                reply_snippet = reply["snippet"]
+                replies.append({
+                    "author": reply_snippet.get("authorDisplayName", ""),
+                    "message": sanitize_message(reply_snippet.get("textDisplay", "")),
+                    "likes": reply_snippet.get("likeCount", 0)
+                })
+
+            next_reply_token = replies_data.get("nextPageToken")
+            if not next_reply_token:
+                break
+
+        return replies
     
     while True:
         comments_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId={video_id}&maxResults=100&key={api_key}"
@@ -164,29 +202,18 @@ def get_video_comments():
             comment = item["snippet"]["topLevelComment"]["snippet"]
             comment_id = item["snippet"]["topLevelComment"]["id"]
             author = comment["authorDisplayName"]
-            message = comment["textDisplay"]
-            timestamp = comment["publishedAt"]
+            message = sanitize_message(comment["textDisplay"])
             likes = comment.get("likeCount", 0)
             replies_count = item["snippet"].get("totalReplyCount", 0)
             
-            comment_time_utc = parser.isoparse(timestamp)
-            time_elapsed = comment_time_utc - video_start_time_utc
-            time_elapsed_str = str(time_elapsed).split('.')[0]
-            
-            # Coletar respostas (replies)
+            # Coletar respostas (replies). A API de commentThreads retorna no maximo 5,
+            # entao usamos comments.list para buscar todas quando houver replies.
             replies_list = []
-            if "replies" in item and replies_count > 0:
-                for reply in item["replies"]["comments"]:
-                    reply_snippet = reply["snippet"]
-                    replies_list.append({
-                        "author": reply_snippet["authorDisplayName"],
-                        "message": reply_snippet["textDisplay"],
-                        "likes": reply_snippet.get("likeCount", 0)
-                    })
+            if replies_count > 0:
+                replies_list = fetch_all_replies(comment_id, api_key)
             
             comment_entry = {
                 "id": comment_id,
-                "time_elapsed": time_elapsed_str,
                 "author": author,
                 "message": message,
                 "likeCount": likes,

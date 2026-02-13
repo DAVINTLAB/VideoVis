@@ -55,7 +55,7 @@ def classification_page():
     st.title("Toxicity Detection")
     
     if "comments_file" not in st.session_state or not st.session_state.comments_file:
-        st.warning('No data uploaded, please upload some data before checking this page')
+        st.warning('⚠️ Please upload a comments.json file first in the "Upload Json" page')
         return
 
     #file_name = st.selectbox('Uploaded archives', st.session_state.comments_file.keys())

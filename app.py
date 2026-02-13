@@ -26,6 +26,50 @@ st.set_page_config(
     layout='wide'
 )
 
+st.markdown(
+    """
+    <style>
+    /* Sidebar nav: remove radio circles, add hover underline, increase spacing */
+    section[data-testid="stSidebar"] [role="radiogroup"] {
+        gap: 0.5rem;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label {
+        padding: 0.35rem 0.5rem;
+        border-radius: 6px;
+        width: 100%;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {
+        display: none;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 999px;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:hover span {
+        color: #ff3b3b;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-thickness: 2px;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) span {
+        color: #ff3b3b;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-thickness: 2px;
+    }
+
+    /* Give main area more breathing room */
+    .block-container {
+        max-width: 1400px;
+        padding-left: 2.5rem;
+        padding-right: 2.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 UPLOAD_DIR = 'input'
 
 if not os.path.exists(UPLOAD_DIR):
@@ -74,7 +118,7 @@ def landing_page():
 def most_comments():
     st.title('Top Comments')
     if st.session_state.get('comments_file') is None:
-        st.warning('Please upload a comments.json file first in the "Upload Json" page')
+        st.warning('⚠️ Please upload a comments.json file first in the "Upload Json" page')
         return
     
     comments_data = st.session_state['comments_file']
@@ -246,7 +290,7 @@ def most_comments():
 def show_stats():
     st.title('Key Stats')
     if st.session_state.get('comments_file') is None:
-        st.warning('Please upload a comments.json file first in the "Upload Json" page')
+        st.warning('⚠️ Please upload a comments.json file first in the "Upload Json" page')
         return
     comments_data = st.session_state['comments_file']
 
@@ -336,7 +380,21 @@ def upload_json(json_file):
 
     st.session_state['comments_file'] = data
 
-pagina = st.sidebar.selectbox('Page', ['Comments Collection', 'Upload Json','Classification', 'Custom Model Classification', 'Model Comparisons', 'Top Comments', 'Stats', 'Toxic Speech', 'Scream Index', 'Sentiment Analysis'])
+pagina = st.sidebar.radio(
+    'Page',
+    [
+        'Comments Collection',
+        'Upload Json',
+        'Classification',
+        'Custom Model Classification',
+        'Model Comparisons',
+        'Top Comments',
+        'Stats',
+        'Toxic Speech',
+        'Scream Index',
+        'Sentiment Analysis',
+    ],
+)
 
 if pagina == 'Top Comments':
     most_comments()

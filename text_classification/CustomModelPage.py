@@ -37,8 +37,7 @@ def custom_model_classification_page():
 
     # Check if comments data is available
     if st.session_state.get('comments_file') is None:
-        st.error("❌ No comments data found. Please upload a JSON file on the main page first.")
-        st.info("💡 Go to 'Upload Json' page to load your comments data.")
+        st.warning('⚠️ Please upload a comments.json file first in the "Upload Json" page')
         return
 
     # Load comments data into DataFrame automatically

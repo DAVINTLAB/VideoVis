@@ -10,7 +10,7 @@ def model_comparisons_page():
     st.markdown("---")
 
     if 'comments_file' not in st.session_state or st.session_state['comments_file'] is None:
-        st.error("❌ No comments data found. Please upload JSON data first.")
+        st.warning('⚠️ Please upload a comments.json file first in the "Upload Json" page')
         return
 
     comments_list = st.session_state['comments_file']

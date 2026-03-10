@@ -6,9 +6,8 @@ import re
 from collections import Counter
 import streamlit as st
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 from v1.main import comments_collect_visualization, load_video_metadata
-from v1.nuvem import gerar_nuvem_palavras, file_to_json
+from v2.output.wordclouds.wordcloud import gerar_nuvem_palavras, file_to_json
 from v1.stats import get_top_authors, get_author_comments
 import plotly.graph_objects as go
 from v2.app_pages.scream_index.scream_index import scream_index_page
@@ -253,16 +252,9 @@ def most_comments():
             st.divider()
             st.subheader("Word Cloud Visualization")
             
-            # Criar word cloud
-            text = ' '.join(all_words)
-            if text:
-                wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
-                
-                # Plotar com matplotlib
-                fig, ax = plt.subplots(figsize=(12, 6))
-                ax.imshow(wordcloud, interpolation='bilinear')
-                ax.axis('off')
-                st.pyplot(fig)
+            if all_words:
+                output_file = gerar_nuvem_palavras(comments_data)
+                st.image(output_file, use_container_width=True)
             else:
                 st.info("Not enough words to generate word cloud")
         else:

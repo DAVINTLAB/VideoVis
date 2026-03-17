@@ -22,12 +22,22 @@ def comments_collect_visualization():
     st.title('Comment Collection')
     st.text(" If you already have a JSON file with comments, go to page 'Upload JSON' to upload it and skip this step.")
     st.text(" Tutorial video to register and save the GOOGLE_API_KEY: https://youtu.be/d4gPrwpzTkc ")
-    api_key = st.text_input("API Key (Google)", type= "password", key= "google_api_key")
+
+    if 'collecting' not in st.session_state:
+        st.session_state.collecting = False
+    if 'next_page_token' not in st.session_state:
+        st.session_state.next_page_token = None
+    if 'comments_list' not in st.session_state:
+        st.session_state.comments_list = []
+    if 'total_collected' not in st.session_state:
+        st.session_state.total_collected = 0
+
+    api_key = st.text_input("API Key (Google)", type="password", key="google_api_key")
     if api_key:
         st.session_state['GOOGLE_API_KEY'] = api_key
-        
+
     video_input = st.text_input("Youtube Video URL or ID", placeholder="https://youtube.com/watch?v=...")
-    
+
     if "youtube.com" in video_input or "youtu.be" in video_input:
         if "watch?v=" in video_input:
             video_id = video_input.split("watch?v=")[1].split("&")[0]
@@ -35,64 +45,85 @@ def comments_collect_visualization():
             video_id = video_input.split("youtu.be/")[1].split("?")[0]
     else:
         video_id = video_input
-    
+
     if video_id:
         st.session_state['VIDEO_ID'] = video_id
 
-    # Opção para iniciar do zero para este vídeo
-    start_fresh = True
+    col1, col2, col3 = st.columns([1, 1, 2])
 
-    if st.button("Start Collection", type = "secondary"):
-        if not api_key or not video_id:
-            st.error("Please provide both API Key and Video ID")
-        else:
-            st.session_state['GOOGLE_API_KEY'] = api_key
-            st.session_state['VIDEO_ID'] = video_id
-            
-            video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={api_key}"
-            video_response = requests.get(video_url)
-            video_data = video_response.json()
-            
-            if "items" in video_data and len(video_data["items"]) > 0:
-                live_broadcast_content = video_data["items"][0]["snippet"].get("liveBroadcastContent", "none")
-                
-                if live_broadcast_content == "live":
-                    st.error("Live videos are not supported. Please use a regular video or a finished live stream.")
-                    st.markdown("### For live stream analysis, visit:")
-                    st.markdown("[**StreamVis Live - Live Stream Analytics**](https://streamvis21.streamlit.app/)", unsafe_allow_html=True)
-                    st.markdown("*This tool supports real-time live stream comment collection and analysis.*")
-                    new_count = 0
-                else:
-                    if start_fresh:
-                        # Limpa o arquivo de comentários específico deste vídeo
-                        save_comments([])
-            
-                    with st.spinner("Collecting comments..."):
-                        st.info("Detected: Regular video (or finished live)")
-                        new_comments = get_video_comments()
-                        if new_comments is not None:
-                            new_count = append_new_comments(new_comments)
-                            st.success(f" Collected and added {new_count} new comments from video")
-                        else:
-                            st.error(" Could not retrieve comments. Check API Key and Video ID.")
-                            new_count = 0
-            
+    with col1:
+        if st.button("Start Collection", type="primary"):
+            if not api_key or not video_id:
+                st.error("Please provide both API Key and Video ID")
             else:
-                st.error("Video not found. Check API Key and Video ID.")
-                new_count = 0
-        
-        # Adicionar botão de download
-        comments = load_existing_comments()
-        if comments:
-            json_string = json.dumps(comments, indent=2, ensure_ascii=False)
-            # Define o nome do arquivo de download específico por vídeo
-            download_name = f"comments_{st.session_state.get('VIDEO_ID','')}.json" if st.session_state.get('VIDEO_ID') else "comments.json"
-            st.download_button(
-                label=" Download Collected Comments",
-                data=json_string,
-                file_name=download_name,
-                mime="application/json"
-            )
+                video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={video_id}&key={api_key}"
+                video_response = requests.get(video_url)
+                video_data = video_response.json()
+
+                if "items" in video_data and len(video_data["items"]) > 0:
+                    live_broadcast_content = video_data["items"][0]["snippet"].get("liveBroadcastContent", "none")
+                    if live_broadcast_content == "live":
+                        st.error("Live videos are not supported. Please use a regular video or a finished live stream.")
+                        st.markdown("### For live stream analysis, visit:")
+                        st.markdown("[**StreamVis Live - Live Stream Analytics**](https://streamvis21.streamlit.app/)", unsafe_allow_html=True)
+                        st.markdown("*This tool supports real-time live stream comment collection and analysis.*")
+                    else:
+                        save_comments([])
+                        st.session_state.collecting = True
+                        st.session_state.next_page_token = None
+                        st.session_state.comments_list = []
+                        st.session_state.total_collected = 0
+                        st.rerun() 
+                else:
+                    st.error("Video not found. Check API Key and Video ID.")
+    
+    with col2:
+        if st.button("Cancel"):
+            if st.session_state.collecting:
+                append_new_comments(st.session_state.comments_list)
+                st.warning(f"Collection cancelled. {st.session_state.total_collected} comments were saved.")
+            
+            st.session_state.collecting = False
+            st.session_state.next_page_token = None
+            st.session_state.comments_list = []
+            st.session_state.total_collected = 0
+            st.rerun()
+
+    if st.session_state.collecting:
+        status_text = st.empty()
+
+        st.info("Detected: Regular video (or finished live). Collection in progress...")
+
+        status_text.text(f"Collecting comments... | Collected so far: {st.session_state.total_collected}")
+        new_comments, next_page = get_video_comments_page(st.session_state.next_page_token)
+
+        if new_comments is not None:
+            st.session_state.comments_list.extend(new_comments)
+            st.session_state.total_collected += len(new_comments)
+            st.session_state.next_page_token = next_page
+
+            if next_page:
+                st.rerun()
+            else:
+                append_new_comments(st.session_state.comments_list)
+                st.success(f"Collection finished! Collected and added {st.session_state.total_collected} new comments.")
+                st.session_state.collecting = False
+                st.session_state.next_page_token = None
+                st.session_state.comments_list = []
+        else:
+            st.error("Could not retrieve comments. Check API Key and Video ID.")
+            st.session_state.collecting = False
+            
+    comments = load_existing_comments()
+    if comments:
+        json_string = json.dumps(comments, indent=2, ensure_ascii=False)
+        download_name = f"comments_{st.session_state.get('VIDEO_ID', '')}.json" if st.session_state.get('VIDEO_ID') else "comments.json"
+        st.download_button(
+            label=" Download Collected Comments",
+            data=json_string,
+            file_name=download_name,
+            mime="application/json"
+        )
 
 def get_video_metadata(video_id, api_key):
     """Coleta metadados do vídeo (visualizações, likes, etc)"""
@@ -120,32 +151,30 @@ def save_video_metadata(metadata):
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=4)
 
-def get_video_comments():
-    """Coleta comentários de vídeos regulares do YouTube"""
+def get_video_comments_page(page_token):
+    """Coleta uma única página de comentários de vídeos regulares do YouTube."""
     comments_list = []
     api_key = st.session_state.get('GOOGLE_API_KEY')
     video_id = st.session_state.get('VIDEO_ID')
-    
-    video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={video_id}&key={api_key}"
-    video_response = requests.get(video_url)
-    video_data = video_response.json()
-    
-    if "items" not in video_data or len(video_data["items"]) == 0:
-        return None
-    
-    # Salvar metadados do vídeo
-    video_item = video_data["items"][0]
-    metadata = {
-        "video_id": video_id,
-        "title": video_item.get("snippet", {}).get("title", ""),
-        "viewCount": int(video_item.get("statistics", {}).get("viewCount", 0)),
-        "likeCount": int(video_item.get("statistics", {}).get("likeCount", 0)),
-        "commentCount": int(video_item.get("statistics", {}).get("commentCount", 0)),
-    }
-    save_video_metadata(metadata)
-    st.session_state['video_metadata'] = metadata
-    
-    next_page_token = None
+
+    if page_token is None:
+        video_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={video_id}&key={api_key}"
+        video_response = requests.get(video_url)
+        video_data = video_response.json()
+        
+        if "items" not in video_data or len(video_data["items"]) == 0:
+            return None, None
+        
+        video_item = video_data["items"][0]
+        metadata = {
+            "video_id": video_id,
+            "title": video_item.get("snippet", {}).get("title", ""),
+            "viewCount": int(video_item.get("statistics", {}).get("viewCount", 0)),
+            "likeCount": int(video_item.get("statistics", {}).get("likeCount", 0)),
+            "commentCount": int(video_item.get("statistics", {}).get("commentCount", 0)),
+        }
+        save_video_metadata(metadata)
+        st.session_state['video_metadata'] = metadata
 
     def sanitize_message(text):
         if not text:
@@ -157,7 +186,6 @@ def get_video_comments():
     def fetch_all_replies(parent_comment_id, api_key_value):
         replies = []
         next_reply_token = None
-
         while True:
             replies_url = (
                 "https://www.googleapis.com/youtube/v3/comments"
@@ -165,13 +193,10 @@ def get_video_comments():
             )
             if next_reply_token:
                 replies_url += f"&pageToken={next_reply_token}"
-
             replies_response = requests.get(replies_url)
             replies_data = replies_response.json()
-
             if "items" not in replies_data:
                 break
-
             for reply in replies_data["items"]:
                 reply_snippet = reply["snippet"]
                 replies.append({
@@ -179,54 +204,45 @@ def get_video_comments():
                     "message": sanitize_message(reply_snippet.get("textDisplay", "")),
                     "likes": reply_snippet.get("likeCount", 0)
                 })
-
             next_reply_token = replies_data.get("nextPageToken")
             if not next_reply_token:
                 break
-
         return replies
+
+    comments_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId={video_id}&maxResults=100&key={api_key}"
+    if page_token:
+        comments_url += f"&pageToken={page_token}"
     
-    while True:
-        comments_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId={video_id}&maxResults=100&key={api_key}"
-        
-        if next_page_token:
-            comments_url += f"&pageToken={next_page_token}"
-        
-        comments_response = requests.get(comments_url)
-        comments_data = comments_response.json()
-        
-        if "items" not in comments_data:
-            break
-        
-        for item in comments_data["items"]:
-            comment = item["snippet"]["topLevelComment"]["snippet"]
-            comment_id = item["snippet"]["topLevelComment"]["id"]
-            author = comment["authorDisplayName"]
-            message = sanitize_message(comment["textDisplay"])
-            likes = comment.get("likeCount", 0)
-            replies_count = item["snippet"].get("totalReplyCount", 0)
-            
-            # Coletar respostas (replies). A API de commentThreads retorna no maximo 5,
-            # entao usamos comments.list para buscar todas quando houver replies.
-            replies_list = []
-            if replies_count > 0:
-                replies_list = fetch_all_replies(comment_id, api_key)
-            
-            comment_entry = {
-                "id": comment_id,
-                "author": author,
-                "message": message,
-                "likeCount": likes,
-                "replyCount": replies_count,
-                "replies": replies_list
-            }
-            comments_list.append(comment_entry)
-        
-        next_page_token = comments_data.get("nextPageToken")
-        if not next_page_token:
-            break
+    comments_response = requests.get(comments_url)
+    comments_data = comments_response.json()
     
-    return comments_list
+    if "items" not in comments_data:
+        return [], None 
+
+    for item in comments_data["items"]:
+        comment = item["snippet"]["topLevelComment"]["snippet"]
+        comment_id = item["snippet"]["topLevelComment"]["id"]
+        author = comment["authorDisplayName"]
+        message = sanitize_message(comment["textDisplay"])
+        likes = comment.get("likeCount", 0)
+        replies_count = item["snippet"].get("totalReplyCount", 0)
+        
+        replies_list = []
+        if replies_count > 0:
+            replies_list = fetch_all_replies(comment_id, api_key)
+        
+        comment_entry = {
+            "id": comment_id,
+            "author": author,
+            "message": message,
+            "likeCount": likes,
+            "replyCount": replies_count,
+            "replies": replies_list
+        }
+        comments_list.append(comment_entry)
+    
+    next_page_token = comments_data.get("nextPageToken")
+    return comments_list, next_page_token
 
 def load_video_metadata(video_id):
     """Carrega metadados do vídeo do arquivo"""
@@ -264,19 +280,3 @@ def append_new_comments(new_comments):
     save_comments(existing_comments)
     
     return len(new_comments_filtered)  # Retorna a quantidade de novos comentários
-
-# Loop para coletar e salvar comentários
-#if __name__ == "__main__":
-#    try:
-#        while True:
-#            live_chat_id, live_start_time_utc = get_live_details()
-#            if live_chat_id and live_start_time_utc:
-#                new_comments = get_chat_messages(live_chat_id, live_start_time_utc)
-#                new_count = append_new_comments(new_comments)
-#                print(f"Coletado e adicionado {new_count} novos comentários.")
-#            else:
-#                print("Não foi possível obter os detalhes da live ou o chat ao vivo. Verifique se o vídeo está ao vivo e se os detalhes estão disponíveis.")
-            
-#            time.sleep(WAIT_TIME)
-#    except KeyboardInterrupt:
-#        print("\n Collection stopped by user")

@@ -28,7 +28,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Sidebar nav: remove radio circles, add hover underline, increase spacing */
     section[data-testid="stSidebar"] [role="radiogroup"] {
         gap: 0.5rem;
     }
@@ -57,8 +56,12 @@ st.markdown(
         text-underline-offset: 4px;
         text-decoration-thickness: 2px;
     }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background: rgba(255, 59, 59, 0.25);
+        border: 1px solid #ff3b3b;
+        border-radius: 999px;
+    }
 
-    /* Give main area more breathing room */
     .block-container {
         max-width: 1400px;
         padding-left: 2.5rem;

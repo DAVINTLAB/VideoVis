@@ -48,26 +48,46 @@ def sentiment_analysis_page():
             use_container_width=True
         )
 
-    st.subheader("Filter Comments by Sentiment")
-    sentiment_filter = st.selectbox(
-        label="Choose sentiment:",
-        options=["positive", "negative", "neutral"]
-    )
+    st.subheader("Comments by Sentiment")
 
-    sentiment_map = {
-        "positive": "POS",
-        "negative": "NEG",
-        "neutral": "NEU"
-    }
-    selected_label = sentiment_map[sentiment_filter]
-    filtered_comments = [c for c in data if c.get("sentiment") == selected_label]
+    def render_sentiment_comments(sentiment_name, sentiment_label):
+        filtered_comments = [c for c in data if c.get("sentiment") == sentiment_label]
+        show_all_key = f"show_all_sentiment_{sentiment_name}"
 
-    st.write(f"Found {len(filtered_comments)} comments.")
-    if filtered_comments:
-        for comment in filtered_comments:
+        if show_all_key not in st.session_state:
+            st.session_state[show_all_key] = False
+
+        st.write(f"Found {len(filtered_comments)} comments.")
+        if not filtered_comments:
+            st.info("No comments found for this sentiment.")
+            return
+
+        comments_to_show = filtered_comments if st.session_state[show_all_key] else filtered_comments[:5]
+        for comment in comments_to_show:
             author = comment.get("author", "")
             message = comment.get("message", "")
             st.write(f"- **{author}**: {message}")
+
+        hidden_count = len(filtered_comments) - 5
+        if hidden_count > 0 and not st.session_state[show_all_key]:
+            if st.button(f"See all ({hidden_count} hidden)", key=f"see_all_{sentiment_name}"):
+                st.session_state[show_all_key] = True
+                st.rerun()
+        elif hidden_count > 0 and st.session_state[show_all_key]:
+            if st.button("Show less", key=f"show_less_{sentiment_name}"):
+                st.session_state[show_all_key] = False
+                st.rerun()
+
+    tab_positive, tab_negative, tab_neutral = st.tabs(["Positive", "Negative", "Neutral"])
+
+    with tab_positive:
+        render_sentiment_comments("positive", "POS")
+
+    with tab_negative:
+        render_sentiment_comments("negative", "NEG")
+
+    with tab_neutral:
+        render_sentiment_comments("neutral", "NEU")
     
         
 

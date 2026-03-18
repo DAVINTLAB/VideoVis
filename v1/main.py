@@ -21,7 +21,7 @@ def get_comments_file_path():
 def comments_collect_visualization():
     st.title('Comment Collection')
     st.text(" If you already have a JSON file with comments, go to page 'Upload JSON' to upload it and skip this step.")
-    st.text(" Tutorial video to register and save the GOOGLE_API_KEY: https://youtu.be/d4gPrwpzTkc ")
+    st.markdown("Tutorial video to register and save the GOOGLE_API_KEY: [https://youtu.be/d4gPrwpzTkc](https://youtu.be/d4gPrwpzTkc)")
 
     if 'collecting' not in st.session_state:
         st.session_state.collecting = False
